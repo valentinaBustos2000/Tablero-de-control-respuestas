@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Seguimiento Encuesta · Universidad de Ibagué</title>
+  <script src="https://cdn.plot.ly/plotly-2.32.0.min.js" charset="utf-8"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; background: #f0f2f5; color: #2c3e50; font-size: 14px; }
+
+    /* HEADER */
+    .header { background: linear-gradient(135deg, #1a5276 0%, #2980b9 100%); color: white; padding: 18px 32px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 3px 10px rgba(0,0,0,0.25); }
+    .header-left h1 { font-size: 20px; font-weight: 700; line-height: 1.3; }
+    .header-left p  { font-size: 12px; opacity: 0.82; margin-top: 3px; }
+    .header-right   { text-align: right; font-size: 12px; opacity: 0.9; }
+    .btn { display: inline-block; padding: 7px 16px; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600; transition: opacity .15s; }
+    .btn:hover { opacity: .85; }
+    .btn-light   { background: rgba(255,255,255,.2); color: white; margin-top: 8px; }
+    .btn-primary { background: #2980b9; color: white; }
+    .btn-success { background: #27ae60; color: white; }
+
+    /* LOADING */
+    #loading { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 70vh; gap: 18px; }
+    .spinner { width: 52px; height: 52px; border: 5px solid #dde; border-top-color: #2980b9; border-radius: 50%; animation: spin .75s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* CONTAINER */
+    .container { max-width: 1400px; margin: 0 auto; padding: 24px 20px; }
+
+    /* GLOBAL KPIs */
+    .kpi-strip { display: grid; grid-template-columns: repeat(4,1fr); gap: 14px; margin-bottom: 24px; }
+    .kpi-card { background: white; border-radius: 10px; padding: 18px 20px; box-shadow: 0 2px 8px rgba(0,0,0,.08); border-left: 5px solid #2980b9; }
+    .kpi-card.green  { border-color: #27ae60; }
+    .kpi-card.red    { border-color: #e74c3c; }
+    .kpi-card.orange { border-color: #f39c12; }
+    .kpi-lbl  { font-size: 11px; color: #7f8c8d; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; margin-bottom: 6px; }
+    .kpi-val  { font-size: 34px; font-weight: 800; color: #2c3e50; line-height: 1; }
+    .kpi-sub  { font-size: 11px; color: #aaa; margin-top: 4px; }
+
+    /* TABS */
+    .tabs-nav { display: flex; gap: 3px; border-bottom: 3px solid #dde; margin-bottom: 0; }
+    .tab-btn  { padding: 10px 22px; border: none; background: none; cursor: pointer; font-size: 13px; font-weight: 600; color: #7f8c8d; border-radius: 8px 8px 0 0; transition: all .18s; }
+    .tab-btn:hover  { background: #eaf4fd; color: #2980b9; }
+    .tab-btn.active { background: white; color: #1a5276; border: 2px solid #dde; border-bottom: 3px solid white; margin-bottom: -3px; }
+    .tab-pane       { display: none; background: white; border: 2px solid #dde; border-top: none; border-radius: 0 10px 10px 10px; padding: 24px; }
+    .tab-pane.active { display: block; }
+
+    /* FACULTY KPIs */
+    .fac-kpis { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; margin-bottom: 22px; }
+    .fac-kpi  { background: #f8f9fa; border-radius: 8px; padding: 14px 16px; text-align: center; }
+    .fac-kpi .val { font-size: 30px; font-weight: 800; }
+    .fac-kpi .lbl { font-size: 11px; color: #7f8c8d; font-weight: 700; text-transform: uppercase; margin-top: 4px; }
+
+    /* CHART ROW */
+    .chart-row { display: grid; grid-template-columns: 2fr 1fr; gap: 18px; margin-bottom: 22px; }
+    .chart-box { background: #f8f9fa; border-radius: 8px; padding: 14px; }
+    .chart-ttl { font-size: 12px; font-weight: 700; color: #555; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 8px; }
+
+    /* TABLES */
+    .sec-title { font-size: 14px; font-weight: 700; color: #1a5276; margin-bottom: 12px; padding-bottom: 6px; border-bottom: 2px solid #eee; }
+    .tbl-wrap  { overflow-x: auto; }
+    table      { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 22px; }
+    th { background: #1a5276; color: white; padding: 10px 12px; text-align: left; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .4px; white-space: nowrap; }
+    td { padding: 8px 12px; border-bottom: 1px solid #f0f0f0; }
+    tr:nth-child(even) { background: #f8f9fa; }
+    tr:hover           { background: #eaf4fd; }
+
+    /* PROGRESS BAR */
+    .pct-bar   { display: flex; align-items: center; gap: 8px; }
+    .pct-track { flex: 1; height: 8px; background: #e8e8e8; border-radius: 4px; overflow: hidden; min-width: 80px; }
+    .pct-fill  { height: 100%; border-radius: 4px; }
+    .fill-g    { background: #27ae60; }
+    .fill-o    { background: #f39c12; }
+    .fill-r    { background: #e74c3c; }
+    .pct-txt   { font-size: 12px; font-weight: 700; min-width: 36px; }
+
+    /* PENDING CONTROLS */
+    .pend-ctrl { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+    .pend-ctrl select,
+    .pend-ctrl input { padding: 7px 11px; border: 1px solid #dde; border-radius: 6px; font-size: 13px; }
+    .pend-ctrl input  { flex: 1; min-width: 200px; }
+    .pend-count { font-size: 12px; color: #888; margin-left: auto; white-space: nowrap; }
+    .show-more  { text-align: center; margin: 12px 0; }
+    .badge-pend { background: #fdecea; color: #c0392b; padding: 2px 9px; border-radius: 10px; font-size: 11px; font-weight: 700; }
+
+    /* FOOTER */
+    .footer { text-align: center; padding: 24px; color: #bbb; font-size: 12px; margin-top: 16px; }
+
+    /* RESPONSIVE */
+    @media (max-width: 900px) {
+      .kpi-strip, .fac-kpis { grid-template-columns: repeat(2,1fr); }
+      .chart-row { grid-template-columns: 1fr; }
+      .header { flex-direction: column; gap: 10px; text-align: center; }
+      .header-right { text-align: center; }
+    }
+    @media (max-width: 500px) {
+      .kpi-strip, .fac-kpis { grid-template-columns: 1fr 1fr; }
+      .tabs-nav { flex-direction: column; border-bottom: none; }
+      .tab-btn { border-radius: 6px; margin-bottom: 2px; }
+      .tab-btn.active { border: 2px solid #2980b9; margin-bottom: 2px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- LOADING -->
+<div id="loading">
+  <div class="spinner"></div>
+  <p style="color:#666;font-size:15px">Cargando datos desde Google Sheets…</p>
+  <p style="color:#aaa;font-size:12px">Esto puede tardar unos segundos</p>
+</div>
+
+<!-- APP -->
+<div id="app" style="display:none">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="header-left">
+      <h1>📊 Seguimiento de Respuestas · Encuesta de Calidad</h1>
+      <p>Aseguramiento de la Calidad &nbsp;·&nbsp; Estudiantes A6 &nbsp;·&nbsp; Universidad de Ibagué</p>
+    </div>
+    <div class="header-right">
+      <div id="last-update" style="margin-bottom:4px">—</div>
+      <button class="btn btn-light" onclick="reloadData()">🔄 Actualizar datos</button>
+    </div>
+  </div>
+
+  <div class="container">
+
+    <!-- GLOBAL KPIs -->
+    <div class="kpi-strip">
+      <div class="kpi-card">
+        <div class="kpi-lbl">👥 Total en base</div>
+        <div class="kpi-val" id="g-total">—</div>
+        <div class="kpi-sub">personas esperadas</div>
+      </div>
+      <div class="kpi-card green">
+        <div class="kpi-lbl">✅ Han respondido</div>
+        <div class="kpi-val" id="g-resp">—</div>
+        <div class="kpi-sub" id="g-resp-pct">—</div>
+      </div>
+      <div class="kpi-card red">
+        <div class="kpi-lbl">⏳ Pendientes</div>
+        <div class="kpi-val" id="g-pend">—</div>
+        <div class="kpi-sub">por responder</div>
+      </div>
+      <div class="kpi-card orange">
+        <div class="kpi-lbl">📈 Avance general</div>
+        <div class="kpi-val" id="g-pct">—</div>
+        <div class="kpi-sub">de respuesta</div>
+      </div>
+    </div>
+
+    <!-- TABS -->
+    <div class="tabs-nav">
+      <button class="tab-btn active" onclick="showTab('econ',this)">Ciencias Económicas y Administrativas</button>
+      <button class="tab-btn"        onclick="showTab('ing',this)">Ingeniería</button>
+      <button class="tab-btn"        onclick="showTab('hum',this)">Humanidades</button>
+    </div>
+
+    <div id="tab-econ" class="tab-pane active"><div id="cnt-econ"></div></div>
+    <div id="tab-ing"  class="tab-pane">       <div id="cnt-ing"></div></div>
+    <div id="tab-hum"  class="tab-pane">       <div id="cnt-hum"></div></div>
+
+  </div>
+
+  <div class="footer">
+    Dashboard · Dirección de Planeación · Universidad de Ibagué &nbsp;·&nbsp;
+    Los datos se leen directamente del formulario publicado en tiempo real.
+  </div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────────────────────
+// CONFIGURACIÓN
+// ─────────────────────────────────────────────────────────────
+const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQmu6wont0_IRf9lxCqcP2i0DAg5OTDh7uqtHVd_Qh4fJdSBqxBNn1KmERlHtIaKoY39rMMnGE0OKTy/pub?gid=1840518298&single=true&output=csv';
+
+// Índices de columna (0-base) — rango A:S del sheet
+const COL = { COD:2, PROG:3, NOM:10, COR:11, GMAIL:12, TEL:13, NIV:14, VAL:18 };
+
+// COD_UNIDAD → clave de facultad  (de Codigos y facultades.xlsx)
+const COD_FAC = {
+  11:'E',12:'E',13:'E',14:'E',15:'E',16:'E',51:'E',52:'E',  // Econ.
+  21:'I',22:'I',23:'I',24:'I',25:'I',26:'I',42:'I',          // Ingeniería
+  32:'H',33:'H',34:'H',35:'H',61:'H'                         // Humanidades
+};
+
+const FACS = [
+  { id:'econ', key:'E', nombre:'Ciencias Económicas y Administrativas' },
+  { id:'ing',  key:'I', nombre:'Ingeniería' },
+  { id:'hum',  key:'H', nombre:'Humanidades' }
+];
+
+const PAGE = 50;   // filas por página en tabla de pendientes
+const pState = {};   // estado de paginación y filtros por facultad
+let DATA = null;
+
+// ─────────────────────────────────────────────────────────────
+// UTILIDADES
+// ─────────────────────────────────────────────────────────────
+const fmt  = n => (n||0).toLocaleString('es-CO');
+const pctC = p => p >= 80 ? '#27ae60' : p >= 50 ? '#f39c12' : '#e74c3c';
+const pctCl= p => p >= 80 ? 'fill-g'  : p >= 50 ? 'fill-o'  : 'fill-r';
+const esc  = s => (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+// ─────────────────────────────────────────────────────────────
+// CARGA Y PROCESAMIENTO
+// ─────────────────────────────────────────────────────────────
+function fetchCSV() {
+  return new Promise((ok, err) =>
+    Papa.parse(CSV_URL, { download:true, header:false, skipEmptyLines:true,
+      complete: r => ok(r.data), error: err }));
+}
+
+function processRows(raw) {
+  const out = [];
+  for (let i = 1; i < raw.length; i++) {
+    const r = raw[i];
+    const cod = parseInt(r[COL.COD]);
+    if (!cod || cod < 1 || cod > 99) continue;
+    const fac = COD_FAC[cod];
+    if (!fac) continue;
+    out.push({
+      fac,
+      prog : (r[COL.PROG]  || '').trim(),
+      nom  : (r[COL.NOM]   || '').trim(),
+      cor  : (r[COL.COR]   || '').trim(),
+      gmail: (r[COL.GMAIL] || '').trim(),
+      tel  : (r[COL.TEL]   || '').trim(),
+      niv  : (r[COL.NIV]   || '').trim(),
+      val  : parseInt(r[COL.VAL]) || 0
+    });
+  }
+  return out;
+}
+
+function buildMetrics(rows) {
+  const G = { total: rows.length, resp: rows.filter(r=>r.val===1).length };
+  G.pend = G.total - G.resp;
+  G.pct  = G.total ? +(G.resp/G.total*100).toFixed(1) : 0;
+
+  const byF = {}, byP = {};
+  for (const r of rows) {
+    (byF[r.fac] = byF[r.fac] || {tot:0,res:0}).tot++;
+    if(r.val===1) byF[r.fac].res++;
+    const pk = r.fac+'|'+r.prog;
+    (byP[pk] = byP[pk] || {fac:r.fac,prog:r.prog,tot:0,res:0}).tot++;
+    if(r.val===1) byP[pk].res++;
+  }
+  for(const f of Object.values(byF)){ f.pen = f.tot-f.res; f.pct = f.tot ? +(f.res/f.tot*100).toFixed(1):0; }
+  for(const p of Object.values(byP)){ p.pen = p.tot-p.res; p.pct = p.tot ? +(p.res/p.tot*100).toFixed(1):0; }
+
+  return { G, byF, progs: Object.values(byP), pend: rows.filter(r=>r.val===0) };
+}
+
+// ─────────────────────────────────────────────────────────────
+// RENDER GLOBAL
+// ─────────────────────────────────────────────────────────────
+function renderGlobal(G) {
+  document.getElementById('g-total').textContent = fmt(G.total);
+  document.getElementById('g-resp').textContent  = fmt(G.resp);
+  document.getElementById('g-resp-pct').textContent = G.pct+'% del total';
+  document.getElementById('g-pend').textContent  = fmt(G.pend);
+  document.getElementById('g-pct').textContent   = G.pct+'%';
+  document.getElementById('last-update').textContent =
+    'Datos al: '+ new Date().toLocaleString('es-CO',{dateStyle:'medium',timeStyle:'short'});
+}
+
+// ─────────────────────────────────────────────────────────────
+// RENDER POR FACULTAD
+// ─────────────────────────────────────────────────────────────
+function renderFac(facId, facKey, progs, pend, byF) {
+  pState[facId] = { page:0, prog:'all', q:'' };
+
+  const f   = byF[facKey] || { tot:0, res:0, pen:0, pct:0 };
+  const fp  = progs.filter(p=>p.fac===facKey).sort((a,b)=>b.pct-a.pct);
+  const fp0 = pend.filter(r=>r.fac===facKey);
+  const progList = [...new Set(fp0.map(r=>r.prog))].sort();
+
+  document.getElementById('cnt-'+facId).innerHTML = `
+    <!-- KPIs facultad -->
+    <div class="fac-kpis">
+      <div class="fac-kpi"><div class="val" style="color:#2980b9">${fmt(f.tot)}</div><div class="lbl">👥 Total esperados</div></div>
+      <div class="fac-kpi"><div class="val" style="color:#27ae60">${fmt(f.res)}</div><div class="lbl">✅ Respondieron</div></div>
+      <div class="fac-kpi"><div class="val" style="color:#e74c3c">${fmt(f.pen)}</div><div class="lbl">⏳ Pendientes</div></div>
+      <div class="fac-kpi"><div class="val" style="color:${pctC(f.pct)}">${f.pct}%</div><div class="lbl">📈 % Avance</div></div>
+    </div>
+
+    <!-- Gráficas -->
+    <div class="chart-row">
+      <div class="chart-box">
+        <div class="chart-ttl">Avance por programa (%)</div>
+        <div id="cb-${facId}" style="height:${Math.max(240, fp.length*52+60)}px"></div>
+      </div>
+      <div class="chart-box">
+        <div class="chart-ttl">Respondieron vs. Pendientes</div>
+        <div id="cp-${facId}" style="height:280px"></div>
+      </div>
+    </div>
+
+    <!-- Tabla por programa -->
+    <div class="sec-title">Resumen por programa</div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr>
+          <th>Programa</th>
+          <th style="text-align:center">Total</th>
+          <th style="text-align:center">Respondieron</th>
+          <th style="text-align:center">Pendientes</th>
+          <th style="min-width:150px">% Avance</th>
+        </tr></thead>
+        <tbody>
+          ${fp.map(p=>`<tr>
+            <td>${esc(p.prog)}</td>
+            <td style="text-align:center">${fmt(p.tot)}</td>
+            <td style="text-align:center;color:#27ae60;font-weight:700">${fmt(p.res)}</td>
+            <td style="text-align:center;color:#e74c3c;font-weight:700">${fmt(p.pen)}</td>
+            <td>
+              <div class="pct-bar">
+                <div class="pct-track"><div class="pct-fill ${pctCl(p.pct)}" style="width:${p.pct}%"></div></div>
+                <span class="pct-txt" style="color:${pctC(p.pct)}">${p.pct}%</span>
+              </div>
+            </td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pendientes -->
+    <div class="sec-title">Personas pendientes por responder</div>
+    <div class="pend-ctrl">
+      <select id="sel-${facId}" onchange="filterPend('${facId}')">
+        <option value="all">Todos los programas</option>
+        ${progList.map(p=>`<option value="${esc(p)}">${esc(p)}</option>`).join('')}
+      </select>
+      <input id="srch-${facId}" type="text" placeholder="Buscar nombre o correo…" oninput="filterPend('${facId}')">
+      <button class="btn btn-success" onclick="dlPend('${facId}')">⬇️ Descargar CSV</button>
+      <span class="pend-count" id="pc-${facId}">${fmt(fp0.length)} pendientes</span>
+    </div>
+    <div id="pt-${facId}"></div>
+    <div class="show-more" id="sm-${facId}"></div>
+  `;
+
+  // Dibujar gráficas
+  requestAnimationFrame(() => {
+    const sorted = [...fp].sort((a,b)=>a.pct-b.pct);
+    Plotly.newPlot('cb-'+facId, [{
+      type:'bar', orientation:'h',
+      x: sorted.map(p=>p.pct),
+      y: sorted.map(p=>p.prog),
+      text: sorted.map(p=>p.pct+'%'),
+      textposition:'outside',
+      marker:{ color: sorted.map(p=>pctC(p.pct)) },
+      customdata: sorted.map(p=>[p.res,p.pen,p.tot]),
+      hovertemplate:'<b>%{y}</b><br>Avance: %{x}%<br>Respondieron: %{customdata[0]}<br>Pendientes: %{customdata[1]}<extra></extra>'
+    }],{
+      xaxis:{ range:[0,118], title:'% Avance', showgrid:true, gridcolor:'#f0f0f0' },
+      yaxis:{ title:'' },
+      margin:{ l:10,r:55,t:10,b:30 },
+      plot_bgcolor:'white', paper_bgcolor:'transparent', showlegend:false
+    },{ responsive:true });
+
+    Plotly.newPlot('cp-'+facId, [{
+      type:'pie', hole:0.50,
+      labels:['Respondieron','Pendientes'],
+      values:[f.res, f.pen],
+      marker:{ colors:['#27ae60','#e74c3c'] },
+      textinfo:'label+percent',
+      hovertemplate:'%{label}: %{value}<extra></extra>'
+    }],{
+      margin:{l:10,r:10,t:10,b:10}, showlegend:false, paper_bgcolor:'transparent'
+    },{ responsive:true });
+  });
+
+  renderPendTable(facId, fp0);
+}
+
+// ─────────────────────────────────────────────────────────────
+// TABLA DE PENDIENTES (filtrable + paginada)
+// ─────────────────────────────────────────────────────────────
+function getFilt(facId) {
+  const key = FACS.find(f=>f.id===facId).key;
+  const all = DATA.pend.filter(r=>r.fac===key);
+  const prog = (document.getElementById('sel-'+facId)||{}).value || 'all';
+  const q    = ((document.getElementById('srch-'+facId)||{}).value||'').toLowerCase();
+  return all.filter(r=>{
+    if (prog !== 'all' && r.prog !== prog) return false;
+    if (q && !r.nom.toLowerCase().includes(q) && !r.cor.toLowerCase().includes(q) && !r.gmail.toLowerCase().includes(q)) return false;
+    return true;
+  });
+}
+
+function renderPendTable(facId, filtered) {
+  const st = pState[facId];
+  const show = filtered.slice(0, (st.page+1)*PAGE);
+  const more = filtered.length > show.length;
+
+  const cEl = document.getElementById('pc-'+facId);
+  const tEl = document.getElementById('pt-'+facId);
+  const mEl = document.getElementById('sm-'+facId);
+  if(cEl) cEl.textContent = fmt(filtered.length)+' pendientes';
+
+  if (!tEl) return;
+
+  if (filtered.length === 0) {
+    tEl.innerHTML = '<p style="text-align:center;color:#27ae60;font-weight:700;padding:20px">🎉 Todos han respondido en esta selección.</p>';
+    if(mEl) mEl.innerHTML = '';
+    return;
+  }
+
+  tEl.innerHTML = `
+    <div class="tbl-wrap">
+    <table>
+      <thead><tr>
+        <th>Nombre Completo</th>
+        <th>Correo Institucional</th>
+        <th>Gmail</th>
+        <th>Programa</th>
+        <th style="text-align:center">Nivel</th>
+        <th>Teléfono</th>
+        <th style="text-align:center">Estado</th>
+      </tr></thead>
+      <tbody>
+        ${show.map(r=>`<tr>
+          <td>${esc(r.nom)||'—'}</td>
+          <td style="font-size:12px">${esc(r.cor)||'—'}</td>
+          <td style="font-size:12px">${esc(r.gmail)||'—'}</td>
+          <td>${esc(r.prog)||'—'}</td>
+          <td style="text-align:center">${esc(r.niv)||'—'}</td>
+          <td>${esc(r.tel)||'—'}</td>
+          <td style="text-align:center"><span class="badge-pend">No contestó</span></td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+    </div>`;
+
+  if(mEl) mEl.innerHTML = more
+    ? `<button class="btn btn-primary" onclick="moreRows('${facId}')">Ver más (${filtered.length-show.length} restantes)</button>`
+    : '';
+}
+
+function filterPend(facId) {
+  pState[facId].page = 0;
+  renderPendTable(facId, getFilt(facId));
+}
+
+function moreRows(facId) {
+  pState[facId].page++;
+  renderPendTable(facId, getFilt(facId));
+}
+
+function dlPend(facId) {
+  const rows = getFilt(facId);
+  const h = ['Nombre Completo','Correo Institucional','Gmail','Programa','Nivel','Teléfono','Estado'];
+  const body = rows.map(r=>[r.nom,r.cor,r.gmail,r.prog,r.niv,r.tel,'No contestó']
+    .map(v=>`"${(v||'').replace(/"/g,'""')}"`).join(','));
+  const csv = '﻿' + [h.join(','), ...body].join('\r\n');
+  const a = Object.assign(document.createElement('a'), {
+    href: URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'})),
+    download: `pendientes_${FACS.find(f=>f.id===facId).nombre.replace(/\s+/g,'_')}.csv`
+  });
+  a.click();
+}
+
+// ─────────────────────────────────────────────────────────────
+// TABS
+// ─────────────────────────────────────────────────────────────
+function showTab(id, btn) {
+  document.querySelectorAll('.tab-pane').forEach(el=>el.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(el=>el.classList.remove('active'));
+  document.getElementById('tab-'+id).classList.add('active');
+  if(btn) btn.classList.add('active');
+  // Forzar redimensión de gráficas
+  setTimeout(()=>{
+    const charts = document.querySelectorAll('#tab-'+id+' [id^="cb-"],[id^="cp-"]');
+    charts.forEach(el=>Plotly.Plots.resize(el));
+  }, 50);
+}
+
+// ─────────────────────────────────────────────────────────────
+// INIT
+// ─────────────────────────────────────────────────────────────
+async function init() {
+  document.getElementById('loading').style.display = 'flex';
+  document.getElementById('app').style.display = 'none';
+  try {
+    const raw     = await fetchCSV();
+    const rows    = processRows(raw);
+    const metrics = buildMetrics(rows);
+    DATA = metrics;
+
+    renderGlobal(metrics.G);
+    for (const f of FACS)
+      renderFac(f.id, f.key, metrics.progs, metrics.pend, metrics.byF);
+
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('app').style.display     = 'block';
+  } catch(e) {
+    document.getElementById('loading').innerHTML = `
+      <p style="font-size:28px">⚠️</p>
+      <p style="font-weight:700;color:#c0392b">Error al cargar los datos</p>
+      <p style="color:#888;margin:8px 0">${e.message || e}</p>
+      <button class="btn btn-primary" onclick="init()">🔄 Reintentar</button>`;
+  }
+}
+
+async function reloadData() { await init(); }
+
+init();
+</script>
+</body>
+</html>
